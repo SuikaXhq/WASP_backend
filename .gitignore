@@ -1,0 +1,6 @@
+data/
+inference_outputs/
+__pycache__/
+.idea/
+*.pyc
+outputs/
