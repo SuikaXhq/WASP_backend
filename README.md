@@ -8,12 +8,13 @@ This repo is for the backend server of [WASP](https://github.com/HarryWangHC/WAS
 - Numpy < 2.0
 - PyTorch == 2.0.1+cu118
 - opencv_python == 4.7.0.72
+- flask >= 3.0.3
 > Other requirements is in `requirements.txt`
 
 ## Usage
 
 - To start the server:
-  ```python
+  ```bash
   python app.py
   ```
 
