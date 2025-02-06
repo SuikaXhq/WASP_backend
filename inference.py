@@ -5,6 +5,7 @@ import torch
 # import os
 import time
 # import csv
+import http
 import urllib.request as request
 
 from model import create_model  # Ensure this is correctly imported from your model file
@@ -21,7 +22,7 @@ from model import create_model  # Ensure this is correctly imported from your mo
 
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 MODEL_TYPES = {
-    # 'total': ['adenoma', 'sessile serrated lesion', 'hyperplastic polyp'],
+    'total': ['sessile serrated lesion', 'adenoma', 'hyperplastic polyp'],
     'cloud': ['cloud', 'no_cloud'],
     'dark': ['dark', 'no_dark'],
     'dark_v': ['dark_v', 'no_dark_v'],
@@ -31,6 +32,11 @@ MODEL_TYPES = {
     # 'spots': ['spots', 'no_spots'],
 }
 COMMENTS = {  # [type_name]: [neg_list, pos_list], both lists are [0-0.33, 0.33-0.66, 0.66-1]
+    'total': [
+        '判断为锯齿状病变',
+        '判断为腺瘤',
+        '判断为增生性息肉',
+    ],
     'dark': [[
         '病变颜色与背景粘膜差异不大，可能因为光线与拍摄角度难以分辨',
         '病变颜色和背景粘膜区别很小，可以认为一样',
@@ -100,9 +106,15 @@ def inference_all(image_url):
     result = {}
     
     print('Loading image...')
-    response = request.urlopen(image_url)
+    for trial in range(3):
+        try:
+            response = request.urlopen(image_url, timeout=3).read()
+            break
+        except http.client.IncompleteRead:
+            continue
+
     # image_name = test_images[i].split(os.path.sep)[-1].split('.')[0]
-    image = cv2.imdecode(np.asarray(bytearray(response.read()), dtype="uint8"), cv2.IMREAD_COLOR)
+    image = cv2.imdecode(np.asarray(bytearray(response), dtype="uint8"), cv2.IMREAD_COLOR)
     # save image
     # cv2.imwrite(f'inference_outputs/0.jpg', image)
     # orig_image = image.copy()
@@ -210,22 +222,25 @@ def inference(image_url, model_type, image=None):
             # result['box'] = box
             result['score'] = str(round(max_score, 6))
             result['class'] = pred_class
-            
-            if max_score < 1/3:
-                if pred_class == 'no_' + model_type:
-                    result['comment'] = COMMENTS[model_type][0][0]
-                else:
-                    result['comment'] = COMMENTS[model_type][1][0]
-            elif max_score < 2/3:
-                if pred_class == 'no_' + model_type:
-                    result['comment'] = COMMENTS[model_type][0][1]
-                else:
-                    result['comment'] = COMMENTS[model_type][1][1]
+
+            if model_type == 'total':
+                result['comment'] = COMMENTS[model_type][outputs[0]['labels'][max_score_idx]-1]
             else:
-                if pred_class == 'no_' + model_type:
-                    result['comment'] = COMMENTS[model_type][0][2]
+                if max_score < 1/3:
+                    if pred_class == 'no_' + model_type:
+                        result['comment'] = COMMENTS[model_type][0][0]
+                    else:
+                        result['comment'] = COMMENTS[model_type][1][0]
+                elif max_score < 2/3:
+                    if pred_class == 'no_' + model_type:
+                        result['comment'] = COMMENTS[model_type][0][1]
+                    else:
+                        result['comment'] = COMMENTS[model_type][1][1]
                 else:
-                    result['comment'] = COMMENTS[model_type][1][2]
+                    if pred_class == 'no_' + model_type:
+                        result['comment'] = COMMENTS[model_type][0][2]
+                    else:
+                        result['comment'] = COMMENTS[model_type][1][2]
             
             # cv2.imwrite(f"inference_outputs/images/{image_name}.jpg", orig_image)
     result['infer_time'] = infer_time
